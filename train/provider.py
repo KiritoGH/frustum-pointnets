@@ -5,7 +5,7 @@ Date: September 2017
 '''
 from __future__ import print_function
 
-import cPickle as pickle
+import _pickle as pickle    # 原来是import cPickle，Python3改成import _pickle
 import sys
 import os
 import numpy as np
