@@ -49,6 +49,8 @@ def tf_gather_object_pc(point_cloud, mask, npoints=512):
     def mask_to_indices(mask):
         indices = np.zeros((mask.shape[0], npoints, 2), dtype=np.int32)
         for i in range(mask.shape[0]):
+            # np.where(condition,x,y)，满足condition，输出x，否则输出y
+            # np.where(condition)，输出满足condition(即非0)元素的坐标
             pos_indices = np.where(mask[i, :] > 0.5)[0]
             # skip cases when pos_indices is empty
             if len(pos_indices) > 0:
@@ -64,6 +66,8 @@ def tf_gather_object_pc(point_cloud, mask, npoints=512):
             indices[i, :, 0] = i
         return indices
 
+    # tf.py_func接收tensor，转换为numpy进行自定义函数操作，最后将输出转化为tensor返回。
+    # tensor没有实际值，不能进行判断操作
     indices = tf.py_func(mask_to_indices, [mask], tf.int32)
     object_pc = tf.gather_nd(point_cloud, indices)
     return object_pc, indices
@@ -133,6 +137,7 @@ def huber_loss(error, delta):
     return tf.reduce_mean(losses)
 
 
+# 将输出张量拆分成几个不同部分，添加到end_points
 def parse_output_to_tensors(output, end_points):
     ''' Parse batch output to separate tensors (added to end_points)
     Input:
