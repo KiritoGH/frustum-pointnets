@@ -6,6 +6,9 @@ Date: September 2017
 
 import numpy as np
 
+
+# 准备一个batch的数据
+# 输入dataset
 def get_batch(dataset, idxs, start_idx, end_idx,
               num_point, num_channel,
               from_rgb_detection=False):
@@ -24,8 +27,7 @@ def get_batch(dataset, idxs, start_idx, end_idx,
         batched data and label
     '''
     if from_rgb_detection:
-        return get_batch_from_rgb_detection(dataset, idxs, start_idx, end_idx,
-            num_point, num_channel)
+        return get_batch_from_rgb_detection(dataset, idxs, start_idx, end_idx, num_point, num_channel)
 
     bsize = end_idx-start_idx
     batch_data = np.zeros((bsize, num_point, num_channel))
@@ -37,18 +39,18 @@ def get_batch(dataset, idxs, start_idx, end_idx,
     batch_size_residual = np.zeros((bsize, 3))
     batch_rot_angle = np.zeros((bsize,))
     if dataset.one_hot:
-        batch_one_hot_vec = np.zeros((bsize,3)) # for car,ped,cyc
+        batch_one_hot_vec = np.zeros((bsize, 3))    # for car,ped,cyc
     for i in range(bsize):
         if dataset.one_hot:
-            ps,seg,center,hclass,hres,sclass,sres,rotangle,onehotvec = \
+            ps, seg, center, hclass, hres, sclass, sres, rotangle, onehotvec = \
                 dataset[idxs[i+start_idx]]
             batch_one_hot_vec[i] = onehotvec
         else:
-            ps,seg,center,hclass,hres,sclass,sres,rotangle = \
+            ps, seg, center, hclass, hres, sclass, sres, rotangle = \
                 dataset[idxs[i+start_idx]]
-        batch_data[i,...] = ps[:,0:num_channel]
-        batch_label[i,:] = seg
-        batch_center[i,:] = center
+        batch_data[i, ...] = ps[:, 0:num_channel]
+        batch_label[i, :] = seg
+        batch_center[i, :] = center
         batch_heading_class[i] = hclass
         batch_heading_residual[i] = hres
         batch_size_class[i] = sclass
@@ -64,6 +66,8 @@ def get_batch(dataset, idxs, start_idx, end_idx,
             batch_heading_class, batch_heading_residual, \
             batch_size_class, batch_size_residual, batch_rot_angle
 
+
+# 从RGB检测器获得一个batch的数据
 def get_batch_from_rgb_detection(dataset, idxs, start_idx, end_idx,
                                  num_point, num_channel):
     bsize = end_idx-start_idx
@@ -71,14 +75,14 @@ def get_batch_from_rgb_detection(dataset, idxs, start_idx, end_idx,
     batch_rot_angle = np.zeros((bsize,))
     batch_prob = np.zeros((bsize,))
     if dataset.one_hot:
-        batch_one_hot_vec = np.zeros((bsize,3)) # for car,ped,cyc
+        batch_one_hot_vec = np.zeros((bsize, 3))    # for car,ped,cyc
     for i in range(bsize):
         if dataset.one_hot:
-            ps,rotangle,prob,onehotvec = dataset[idxs[i+start_idx]]
+            ps, rotangle, prob, onehotvec = dataset[idxs[i+start_idx]]
             batch_one_hot_vec[i] = onehotvec
         else:
-            ps,rotangle,prob = dataset[idxs[i+start_idx]]
-        batch_data[i,...] = ps[:,0:num_channel]
+            ps, rotangle, prob = dataset[idxs[i+start_idx]]
+        batch_data[i, ...] = ps[:, 0:num_channel]
         batch_rot_angle[i] = rotangle
         batch_prob[i] = prob
     if dataset.one_hot:

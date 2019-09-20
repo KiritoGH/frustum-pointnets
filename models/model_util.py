@@ -11,13 +11,17 @@ import tf_util
 # Global Constants
 # -----------------
 
-NUM_HEADING_BIN = 12
-NUM_SIZE_CLUSTER = 8  # one cluster for each type
-NUM_OBJECT_POINT = 512
+NUM_HEADING_BIN = 12    # 设定12种朝向，每30°一种
+NUM_SIZE_CLUSTER = 8    # 设定8种尺寸类型
+NUM_OBJECT_POINT = 512  # 物体点数
+# 字典，str:int
 g_type2class = {'Car': 0, 'Van': 1, 'Truck': 2, 'Pedestrian': 3,
                 'Person_sitting': 4, 'Cyclist': 5, 'Tram': 6, 'Misc': 7}
+# 字典，int:str
 g_class2type = {g_type2class[t]: t for t in g_type2class}
+# 字典，用于转换为独热编码
 g_type2onehotclass = {'Car': 0, 'Pedestrian': 1, 'Cyclist': 2}
+# 8种类型的平均尺寸
 g_type_mean_size = {'Car': np.array([3.88311640418, 1.62856739989, 1.52563191462]),
                     'Van': np.array([5.06763659, 1.9007158, 2.20532825]),
                     'Truck': np.array([10.13586957, 2.58549199, 3.2520595]),
@@ -26,7 +30,8 @@ g_type_mean_size = {'Car': np.array([3.88311640418, 1.62856739989, 1.52563191462
                     'Cyclist': np.array([1.76282397, 0.59706367, 1.73698127]),
                     'Tram': np.array([16.17150617, 2.53246914, 3.53079012]),
                     'Misc': np.array([3.64300781, 1.54298177, 1.92320313])}
-g_mean_size_arr = np.zeros((NUM_SIZE_CLUSTER, 3))  # size clustrs
+g_mean_size_arr = np.zeros((NUM_SIZE_CLUSTER, 3))  # 初始化，(NS,3)
+# 将8种类型的尺寸赋值给g_mean_size_arr
 for i in range(NUM_SIZE_CLUSTER):
     g_mean_size_arr[i, :] = g_type_mean_size[g_class2type[i]]
 
@@ -35,6 +40,9 @@ for i in range(NUM_SIZE_CLUSTER):
 # TF Functions Helpers
 # -----------------
 
+# 根据mask获取物体点云
+# 输入点云、mask、最大点数
+# 输出物体点云和点云索引
 def tf_gather_object_pc(point_cloud, mask, npoints=512):
     ''' Gather object point clouds according to predicted masks.
     Input:
@@ -51,17 +59,17 @@ def tf_gather_object_pc(point_cloud, mask, npoints=512):
         for i in range(mask.shape[0]):
             # np.where(condition,x,y)，满足condition，输出x，否则输出y
             # np.where(condition)，输出满足condition(即非0)元素的坐标
+            # 返回元组，所以最后加了个[0]变为numpy
             pos_indices = np.where(mask[i, :] > 0.5)[0]
-            # skip cases when pos_indices is empty
+            # print(pos_indices.shape)
+            # pos_indices为空即第i个样本没有mask大于0.5，则跳过
             if len(pos_indices) > 0:
-                if len(pos_indices) > npoints:
-                    choice = np.random.choice(len(pos_indices),
-                                              npoints, replace=False)
-                else:
-                    choice = np.random.choice(len(pos_indices),
-                                              npoints - len(pos_indices), replace=True)
+                if len(pos_indices) > npoints:  # 点数多于最大点数，从中随机选取最大点数个点（不放回）
+                    choice = np.random.choice(len(pos_indices), npoints, replace=False)
+                else:                           # 否则，保留点的同时，再随机挑选一些补足空余（放回）
+                    choice = np.random.choice(len(pos_indices), npoints - len(pos_indices), replace=True)
                     choice = np.concatenate((np.arange(len(pos_indices)), choice))
-                np.random.shuffle(choice)
+                np.random.shuffle(choice)       # 打乱索引的索引
                 indices[i, :, 1] = pos_indices[choice]
             indices[i, :, 0] = i
         return indices
@@ -69,24 +77,28 @@ def tf_gather_object_pc(point_cloud, mask, npoints=512):
     # tf.py_func接收tensor，转换为numpy进行自定义函数操作，最后将输出转化为tensor返回。
     # tensor没有实际值，不能进行判断操作
     indices = tf.py_func(mask_to_indices, [mask], tf.int32)
-    object_pc = tf.gather_nd(point_cloud, indices)
+    object_pc = tf.gather_nd(point_cloud, indices)  # 根据索引从点云中收集对应数据
     return object_pc, indices
 
 
+# 计算3D边框的8个顶点坐标的基础函数
+# 输入中心(N,3)、朝向角(N,)、尺寸(N,3)
+# 输出顶点坐标(N,8,3)
 def get_box3d_corners_helper(centers, headings, sizes):
     """ TF layer. Input: (N,3), (N,), (N,3), Output: (N,8,3) """
     # print '-----', centers
     N = centers.get_shape()[0].value
+    # sizes沿第1（二）维度划分为三部分，即l,w,h
     l = tf.slice(sizes, [0, 0], [-1, 1])  # (N,1)
     w = tf.slice(sizes, [0, 1], [-1, 1])  # (N,1)
     h = tf.slice(sizes, [0, 2], [-1, 1])  # (N,1)
-    # print l,w,h
+    # 8个顶点相对于中心的位置坐标
     x_corners = tf.concat([l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2], axis=1)  # (N,8)
     y_corners = tf.concat([h / 2, h / 2, h / 2, h / 2, -h / 2, -h / 2, -h / 2, -h / 2], axis=1)  # (N,8)
     z_corners = tf.concat([w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2], axis=1)  # (N,8)
     corners = tf.concat([tf.expand_dims(x_corners, 1), tf.expand_dims(y_corners, 1), tf.expand_dims(z_corners, 1)],
                         axis=1)  # (N,3,8)
-    # print x_corners, y_corners, z_corners
+
     c = tf.cos(headings)
     s = tf.sin(headings)
     ones = tf.ones([N], dtype=tf.float32)
@@ -94,14 +106,18 @@ def get_box3d_corners_helper(centers, headings, sizes):
     row1 = tf.stack([c, zeros, s], axis=1)  # (N,3)
     row2 = tf.stack([zeros, ones, zeros], axis=1)
     row3 = tf.stack([-s, zeros, c], axis=1)
+    # y轴旋转矩阵
     R = tf.concat([tf.expand_dims(row1, 1), tf.expand_dims(row2, 1), tf.expand_dims(row3, 1)], axis=1)  # (N,3,3)
-    # print row1, row2, row3, R, N
+    # 对8个顶点根据朝向进行旋转，计算绝对位置坐标
     corners_3d = tf.matmul(R, corners)  # (N,3,8)
     corners_3d += tf.tile(tf.expand_dims(centers, 2), [1, 1, 8])  # (N,3,8)
     corners_3d = tf.transpose(corners_3d, perm=[0, 2, 1])  # (N,8,3)
     return corners_3d
 
 
+# 利用基础函数，计算B个中心NH×NS种情况即N=B×NH×NS
+# 输入中心(B,3)、朝向角残差(B,NH)、尺寸残差(B,NS,3)
+# 输出所有顶点坐标向量(B,NH,NS,8,3)
 def get_box3d_corners(center, heading_residuals, size_residuals):
     """ TF layer.
     Inputs:
@@ -112,16 +128,17 @@ def get_box3d_corners(center, heading_residuals, size_residuals):
         box3d_corners: (B,NH,NS,8,3) tensor
     """
     batch_size = center.get_shape()[0].value
-    heading_bin_centers = tf.constant(np.arange(0, 2 * np.pi, 2 * np.pi / NUM_HEADING_BIN), dtype=tf.float32)  # (NH,)
+    # 2pi划分为NH份，加上朝向角残差
+    heading_bin_centers = tf.constant(np.arange(0, 2 * np.pi, 2 * np.pi / NUM_HEADING_BIN), dtype=tf.float32)
     headings = heading_residuals + tf.expand_dims(heading_bin_centers, 0)  # (B,NH)
-
-    mean_sizes = tf.expand_dims(tf.constant(g_mean_size_arr, dtype=tf.float32), 0) + size_residuals  # (B,NS,1)
+    # NS种类型尺寸加上残差
+    mean_sizes = tf.expand_dims(tf.constant(g_mean_size_arr, dtype=tf.float32), 0)  # (1,NS,3)
     sizes = mean_sizes + size_residuals  # (B,NS,3)
     sizes = tf.tile(tf.expand_dims(sizes, 1), [1, NUM_HEADING_BIN, 1, 1])  # (B,NH,NS,3)
     headings = tf.tile(tf.expand_dims(headings, -1), [1, 1, NUM_SIZE_CLUSTER])  # (B,NH,NS)
     centers = tf.tile(tf.expand_dims(tf.expand_dims(center, 1), 1),
                       [1, NUM_HEADING_BIN, NUM_SIZE_CLUSTER, 1])  # (B,NH,NS,3)
-
+    # 所有情况N
     N = batch_size * NUM_HEADING_BIN * NUM_SIZE_CLUSTER
     corners_3d = get_box3d_corners_helper(tf.reshape(centers, [N, 3]), tf.reshape(headings, [N]),
                                           tf.reshape(sizes, [N, 3]))
@@ -150,17 +167,17 @@ def parse_output_to_tensors(output, end_points):
     center = tf.slice(output, [0, 0], [-1, 3])
     end_points['center_boxnet'] = center
 
-    heading_scores = tf.slice(output, [0, 3], [-1, NUM_HEADING_BIN])
+    heading_scores = tf.slice(output, [0, 3], [-1, NUM_HEADING_BIN])    # 朝向角得分
     heading_residuals_normalized = tf.slice(output, [0, 3 + NUM_HEADING_BIN],
                                             [-1, NUM_HEADING_BIN])
     end_points['heading_scores'] = heading_scores  # BxNUM_HEADING_BIN
     end_points['heading_residuals_normalized'] = \
-        heading_residuals_normalized  # BxNUM_HEADING_BIN (-1 to 1)
+        heading_residuals_normalized  # BxNUM_HEADING_BIN 归一化到(-1,1)
     end_points['heading_residuals'] = \
-        heading_residuals_normalized * (np.pi / NUM_HEADING_BIN)  # BxNUM_HEADING_BIN
+        heading_residuals_normalized * (np.pi / NUM_HEADING_BIN)  # BxNUM_HEADING_BIN 重新转换到(-pi/NH,pi/NH)
 
     size_scores = tf.slice(output, [0, 3 + NUM_HEADING_BIN * 2],
-                           [-1, NUM_SIZE_CLUSTER])  # BxNUM_SIZE_CLUSTER
+                           [-1, NUM_SIZE_CLUSTER])  # BxNUM_SIZE_CLUSTER    尺寸得分
     size_residuals_normalized = tf.slice(output,
                                          [0, 3 + NUM_HEADING_BIN * 2 + NUM_SIZE_CLUSTER], [-1, NUM_SIZE_CLUSTER * 3])
     size_residuals_normalized = tf.reshape(size_residuals_normalized,
@@ -168,7 +185,7 @@ def parse_output_to_tensors(output, end_points):
     end_points['size_scores'] = size_scores
     end_points['size_residuals_normalized'] = size_residuals_normalized
     end_points['size_residuals'] = size_residuals_normalized * \
-                                   tf.expand_dims(tf.constant(g_mean_size_arr, dtype=tf.float32), 0)
+                                   tf.expand_dims(tf.constant(g_mean_size_arr, dtype=tf.float32), 0)    # 尺寸还原
 
     return end_points
 
@@ -177,6 +194,7 @@ def parse_output_to_tensors(output, end_points):
 # Shared subgraphs for v1 and v2 models
 # --------------------------------------
 
+# 创建占位符
 def placeholder_inputs(batch_size, num_point):
     ''' Get useful placeholder tensors.
     Input:
@@ -207,6 +225,7 @@ def placeholder_inputs(batch_size, num_point):
 # logits为经过实例分割网络后的输出(B,N,2)
 # xyz_only为是否只返回XYZ通道
 # 输出物体点云(B,M,3)，为了简化，只保留了XYZ，M是物体点数，作为一个超参数
+# 输出mask后点云的坐标中心(B,3)，end_points['mask'] = mask
 def point_cloud_masking(point_cloud, logits, end_points, xyz_only=True):
     ''' Select point cloud with predicted 3D mask,
     translate coordinates to the masked points centroid.
@@ -226,13 +245,11 @@ def point_cloud_masking(point_cloud, logits, end_points, xyz_only=True):
     num_point = point_cloud.get_shape()[1].value
     # 切片tf.slice(input,begin,size,name),begin指定开始位置,size指定切片大小,-1为从开始一直到结束
     # 比较(B,N,0)(B,N,1)，并转换为float
-    mask = tf.slice(logits, [0, 0, 0], [-1, -1, 1]) < \
-           tf.slice(logits, [0, 0, 1], [-1, -1, 1])
+    mask = tf.slice(logits, [0, 0, 0], [-1, -1, 1]) < tf.slice(logits, [0, 0, 1], [-1, -1, 1])
     mask = tf.to_float(mask)  # BxNx1
     # 求和tf.reduce_sum(input,axis,keep_dims),axis指定求和的维度,keep_dims决定是否保留原始维度
     # 先对mask的第1维度求和，保留维度，再进行复制平铺，得到(B,1,3)即掩膜选取下的点数
-    mask_count = tf.tile(tf.reduce_sum(mask, axis=1, keep_dims=True),
-                         [1, 1, 3])  # Bx1x3
+    mask_count = tf.tile(tf.reduce_sum(mask, axis=1, keep_dims=True), [1, 1, 3])  # Bx1x3
     # 对输入点云进行切片，选取三维坐标
     point_cloud_xyz = tf.slice(point_cloud, [0, 0, 0], [-1, -1, 3])  # BxNx3
     # 复制平铺掩膜为(B,N,3)，作用在点云坐标上，对N个点的三维坐标进行求和，保留维度，求平均值，得到掩膜后点云的坐标中心
@@ -242,23 +259,21 @@ def point_cloud_masking(point_cloud, logits, end_points, xyz_only=True):
     end_points['mask'] = mask
 
     # 将输入坐标转换到掩膜点云坐标中心
-    point_cloud_xyz_stage1 = point_cloud_xyz - \
-                             tf.tile(mask_xyz_mean, [1, num_point, 1])
+    point_cloud_xyz_stage1 = point_cloud_xyz - tf.tile(mask_xyz_mean, [1, num_point, 1])
     # 点云只返回XYZ坐标（已转换到掩膜点云坐标中心），或者拼接上其它通道
     if xyz_only:
         point_cloud_stage1 = point_cloud_xyz_stage1
     else:
         point_cloud_features = tf.slice(point_cloud, [0, 0, 3], [-1, -1, -1])
-        point_cloud_stage1 = tf.concat(
-            [point_cloud_xyz_stage1, point_cloud_features], axis=-1)
+        point_cloud_stage1 = tf.concat([point_cloud_xyz_stage1, point_cloud_features], axis=-1)
     # 获得点云数据的通道数
     num_channels = point_cloud_stage1.get_shape()[2].value
-    #
-    object_point_cloud, _ = tf_gather_object_pc(point_cloud_stage1,
-                                                mask, NUM_OBJECT_POINT)
+    # 根据mask和物体点数获取物体点云
+    object_point_cloud, _ = tf_gather_object_pc(point_cloud_stage1, mask, NUM_OBJECT_POINT)
     object_point_cloud.set_shape([batch_size, NUM_OBJECT_POINT, num_channels])
 
     return object_point_cloud, tf.squeeze(mask_xyz_mean, axis=1), end_points
+
 
 # 中心残差回归网络
 # 输入3D mask坐标系下的物体点云(B,M,C)，独热向量
@@ -304,6 +319,7 @@ def get_center_regression_net(object_point_cloud, one_hot_vec,
     return predicted_center, end_points
 
 
+# 计算损失函数
 def get_loss(mask_label, center_label,
              heading_class_label, heading_residual_label,
              size_class_label, size_residual_label,
@@ -325,12 +341,12 @@ def get_loss(mask_label, center_label,
         total_loss: TF scalar tensor
             the total_loss is also added to the losses collection
     '''
-    # 3D Segmentation loss
+    # 分割网络输出logits计算3D分割损失
     mask_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
         logits=end_points['mask_logits'], labels=mask_label))
     tf.summary.scalar('3d mask loss', mask_loss)
 
-    # Center regression losses
+    # 中心回归损失
     center_dist = tf.norm(center_label - end_points['center'], axis=-1)
     center_loss = huber_loss(center_dist, delta=2.0)
     tf.summary.scalar('center loss', center_loss)
@@ -339,7 +355,7 @@ def get_loss(mask_label, center_label,
     stage1_center_loss = huber_loss(stage1_center_dist, delta=1.0)
     tf.summary.scalar('stage1 center loss', stage1_center_loss)
 
-    # Heading loss
+    # 朝向损失
     heading_class_loss = tf.reduce_mean(
         tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=end_points['heading_scores'], labels=heading_class_label))
@@ -356,7 +372,7 @@ def get_loss(mask_label, center_label,
     tf.summary.scalar('heading residual normalized loss',
                       heading_residual_normalized_loss)
 
-    # Size loss
+    # 尺寸损失
     size_class_loss = tf.reduce_mean(
         tf.nn.sparse_softmax_cross_entropy_with_logits(
             logits=end_points['size_scores'], labels=size_class_label))
@@ -382,7 +398,7 @@ def get_loss(mask_label, center_label,
     tf.summary.scalar('size residual normalized loss',
                       size_residual_normalized_loss)
 
-    # Corner loss
+    # 顶点损失
     # We select the predicted corners corresponding to the 
     # GT heading bin and size cluster.
     corners_3d = get_box3d_corners(end_points['center'],
@@ -415,7 +431,7 @@ def get_loss(mask_label, center_label,
     corners_loss = huber_loss(corners_dist, delta=1.0)
     tf.summary.scalar('corners loss', corners_loss)
 
-    # Weighted sum of all losses
+    # 权重求和
     total_loss = mask_loss + box_loss_weight * (center_loss +
                                                 heading_class_loss + size_class_loss +
                                                 heading_residual_normalized_loss * 20 +
@@ -425,3 +441,13 @@ def get_loss(mask_label, center_label,
     tf.add_to_collection('losses', total_loss)
 
     return total_loss
+
+
+# 自己测试
+if __name__ == '__main__':
+    with tf.Graph().as_default():
+        inputs = tf.zeros((32, 1024, 4))
+        mask = tf.ones((32, 1024))
+        object_pc, indices = tf_gather_object_pc(inputs, mask)
+        print('end')
+
