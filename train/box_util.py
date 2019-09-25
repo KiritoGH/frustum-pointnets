@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 """ Helper functions for calculating 2D and 3D bounding box IoU.
 
 Collected by Charles R. Qi

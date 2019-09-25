@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 ''' Util functions for training and evaluation.
 
 Author: Charles R. Qi

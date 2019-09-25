@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 ''' Frsutum PointNets v1 Model.
 '''
 from __future__ import print_function

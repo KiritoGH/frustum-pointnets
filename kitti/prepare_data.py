@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ''' Prepare KITTI data for 3D object detection.
 
 Author: Charles R. Qi

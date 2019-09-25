@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ''' Training Frustum PointNets.
 
 Author: Charles R. Qi
@@ -23,7 +24,7 @@ from train_util import get_batch
 # 创建一个解析对象
 parser = argparse.ArgumentParser()
 # 添加关注的命令行参数和选项
-parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: GPU 0]')
+parser.add_argument('--gpu', type=int, default=0, help='GPU to use [default: 0]')
 parser.add_argument('--model', default='frustum_pointnets_v1', help='Model name [default: frustum_pointnets_v1]')
 parser.add_argument('--log_dir', default='log', help='Log dir [default: log]')
 parser.add_argument('--num_point', type=int, default=2048, help='Point Number [default: 2048]')
@@ -127,6 +128,7 @@ def train():
             # for you every time it trains.
             batch = tf.get_variable('batch', [], initializer=tf.constant_initializer(0), trainable=False)
             bn_decay = get_bn_decay(batch)  # 获取移动平均权重
+            log_string('bn decay: %f' % bn_decay)
             tf.summary.scalar('bn_decay', bn_decay)
 
             # 获取模型和损失
@@ -161,6 +163,7 @@ def train():
 
             # Get training operator
             learning_rate = get_learning_rate(batch)            # 获取学习率
+            log_string('learning rate: %f' % learning_rate)
             tf.summary.scalar('learning_rate', learning_rate)
             if OPTIMIZER == 'momentum':                         # 根据设定的优化器来进行参数更新
                 optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=MOMENTUM)
