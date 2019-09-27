@@ -23,8 +23,7 @@ from model_util import placeholder_inputs, parse_output_to_tensors, get_loss
 # 输入点云(B,N,4)，包含截锥体点云三维坐标和强度；
 # 独热向量(B,3)表征物体类别；
 # 输出分类得分(B,N,2)
-def get_instance_seg_v1_net(point_cloud, one_hot_vec,
-                            is_training, bn_decay, end_points):
+def get_instance_seg_v1_net(point_cloud, one_hot_vec, is_training, bn_decay, end_points):
     ''' 3D instance segmentation PointNet v1 network.
     Input:
         point_cloud: TF tensor in shape (B,N,4)
@@ -106,9 +105,8 @@ def get_instance_seg_v1_net(point_cloud, one_hot_vec,
 # 三维边框估计网络
 # 输入物体坐标系下的点云(B,M,C),M是点数，C是通道数
 # one_hot_vec(B,3)表征物体类别
-# 输出表征边框的张量(B,3+4*NS+2*NH)，包含边框中心(3)，
-def get_3d_box_estimation_v1_net(object_point_cloud, one_hot_vec,
-                                 is_training, bn_decay, end_points):
+# 输出表征边框的张量(B,3+2*NH+4*NS)，依次包含边框中心3，朝向角得分NH，朝向角残差归一化值NH，尺寸得分NS，尺寸残差归一化值3NS
+def get_3d_box_estimation_v1_net(object_point_cloud, one_hot_vec, is_training, bn_decay, end_points):
     ''' 3D Box Estimation PointNet v1 network.
     Input:
         object_point_cloud: TF tensor in shape (B,M,C)
@@ -158,6 +156,7 @@ def get_3d_box_estimation_v1_net(object_point_cloud, one_hot_vec,
     # B×(3+4NS+2NH)
     return output, end_points
 
+
 # Frustum PointNets模型，预测三维物体掩膜，非模态边界框
 # 输入点云(B,N,4),三维坐标+强度
 # 独热向量(B,3)表征物体类别
@@ -179,39 +178,39 @@ def get_model(point_cloud, one_hot_vec, is_training, bn_decay=None):
     '''
     end_points = {}
 
-    # 3D Instance Segmentation PointNet
+    # 3D实例分割PointNet
     logits, end_points = get_instance_seg_v1_net(
         point_cloud, one_hot_vec,
         is_training, bn_decay, end_points)
     end_points['mask_logits'] = logits
 
-    # Masking
-    # select masked points and translate to masked points' centroid
+    # 根据mask筛选点云，并转换到mask点云中心
     object_point_cloud_xyz, mask_xyz_mean, end_points = \
         point_cloud_masking(point_cloud, logits, end_points)
 
-    # T-Net and coordinate translation
+    # T-Net中心残差回归网络和坐标转换
     center_delta, end_points = get_center_regression_net(
         object_point_cloud_xyz, one_hot_vec,
         is_training, bn_decay, end_points)
     stage1_center = center_delta + mask_xyz_mean  # Bx3
-    end_points['stage1_center'] = stage1_center
-    # Get object point cloud in object coordinate
-    object_point_cloud_xyz_new = \
-        object_point_cloud_xyz - tf.expand_dims(center_delta, 1)
+    end_points['stage1_center'] = stage1_center     # 物体坐标系中心在原坐标下的位置
+    # 获得物体坐标系下的物体点云
+    object_point_cloud_xyz_new = object_point_cloud_xyz - tf.expand_dims(center_delta, 1)
 
-    # Amodel Box Estimation PointNet
+    # 边框估计PointNet
     output, end_points = get_3d_box_estimation_v1_net(
         object_point_cloud_xyz_new, one_hot_vec,
         is_training, bn_decay, end_points)
 
-    # Parse output to 3D box parameters
+    # 将输出拆分并进行保存
     end_points = parse_output_to_tensors(output, end_points)
+    # center_boxnet为3D边框估计网络估计的边框中心，加上物体坐标系中心在原坐标下的位置，得到边框中心在原坐标系下的位置
     end_points['center'] = end_points['center_boxnet'] + stage1_center  # Bx3
 
     return end_points
 
 
+# 测试
 if __name__ == '__main__':
     with tf.Graph().as_default():
         inputs = tf.zeros((32, 1024, 4))

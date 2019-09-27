@@ -128,7 +128,7 @@ def train():
             # for you every time it trains.
             batch = tf.get_variable('batch', [], initializer=tf.constant_initializer(0), trainable=False)
             bn_decay = get_bn_decay(batch)  # 获取移动平均权重
-            log_string('bn decay: %f' % bn_decay)
+            # log_string('bn decay: %f' % bn_decay)   # 错误：要求float，但bn_decay是张量
             tf.summary.scalar('bn_decay', bn_decay)
 
             # 获取模型和损失
@@ -163,7 +163,7 @@ def train():
 
             # Get training operator
             learning_rate = get_learning_rate(batch)            # 获取学习率
-            log_string('learning rate: %f' % learning_rate)
+            # log_string('learning rate: %f' % learning_rate)     # 错误：要求float，但bn_decay是张量
             tf.summary.scalar('learning_rate', learning_rate)
             if OPTIMIZER == 'momentum':                         # 根据设定的优化器来进行参数更新
                 optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=MOMENTUM)

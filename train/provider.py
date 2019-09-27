@@ -134,10 +134,11 @@ class FrustumDataset(object):
         self.rotate_to_center = rotate_to_center
         self.one_hot = one_hot
         if overwritten_data_path is None:
-            overwritten_data_path = os.path.join(ROOT_DIR,
-                                                 'kitti/frustum_carpedcyc_%s.pickle' % (split))
+            overwritten_data_path = os.path.join(ROOT_DIR, 'kitti/frustum_carpedcyc_%s.pickle' % (split))
+            print(overwritten_data_path)
 
         self.from_rgb_detection = from_rgb_detection
+        print('load starts')
         if from_rgb_detection:
             with open(overwritten_data_path, 'rb') as fp:
                 self.id_list = pickle.load(fp)
@@ -159,6 +160,7 @@ class FrustumDataset(object):
                 self.size_list = pickle.load(fp)
                 # frustum_angle is clockwise angle from positive x-axis
                 self.frustum_angle_list = pickle.load(fp)
+        print('load ends')
 
     def __len__(self):
         return len(self.input_list)
