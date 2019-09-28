@@ -10,10 +10,9 @@ import numpy as np
 
 
 # 准备一个batch的数据
-# 输入dataset
-def get_batch(dataset, idxs, start_idx, end_idx,
-              num_point, num_channel,
-              from_rgb_detection=False):
+# 输入dataset,索引,点数,通道数
+# 输出数据和标签
+def get_batch(dataset, idxs, start_idx, end_idx, num_point, num_channel, from_rgb_detection=False):
     ''' Prepare batch data for training/evaluation.
     batch size is determined by start_idx-end_idx
 
@@ -31,25 +30,23 @@ def get_batch(dataset, idxs, start_idx, end_idx,
     if from_rgb_detection:
         return get_batch_from_rgb_detection(dataset, idxs, start_idx, end_idx, num_point, num_channel)
 
-    bsize = end_idx-start_idx
-    batch_data = np.zeros((bsize, num_point, num_channel))
-    batch_label = np.zeros((bsize, num_point), dtype=np.int32)
-    batch_center = np.zeros((bsize, 3))
-    batch_heading_class = np.zeros((bsize,), dtype=np.int32)
-    batch_heading_residual = np.zeros((bsize,))
-    batch_size_class = np.zeros((bsize,), dtype=np.int32)
-    batch_size_residual = np.zeros((bsize, 3))
-    batch_rot_angle = np.zeros((bsize,))
+    bsize = end_idx-start_idx   # batchsize
+    batch_data = np.zeros((bsize, num_point, num_channel))      # 数据(B,N,C)
+    batch_label = np.zeros((bsize, num_point), dtype=np.int32)  # 标签(B,N)
+    batch_center = np.zeros((bsize, 3))                         # 中心(B,3)
+    batch_heading_class = np.zeros((bsize,), dtype=np.int32)    # 朝向角类别(B,)
+    batch_heading_residual = np.zeros((bsize,))                 # 朝向角残差(B,)
+    batch_size_class = np.zeros((bsize,), dtype=np.int32)       # 尺寸类别(B,)
+    batch_size_residual = np.zeros((bsize, 3))                  # 尺寸残差(B,3)
+    batch_rot_angle = np.zeros((bsize,))                        # 旋转角(B,)
     if dataset.one_hot:
-        batch_one_hot_vec = np.zeros((bsize, 3))    # for car,ped,cyc
+        batch_one_hot_vec = np.zeros((bsize, 3))    # 类别独热编码向量(B,3)
     for i in range(bsize):
         if dataset.one_hot:
-            ps, seg, center, hclass, hres, sclass, sres, rotangle, onehotvec = \
-                dataset[idxs[i+start_idx]]
+            ps, seg, center, hclass, hres, sclass, sres, rotangle, onehotvec = dataset[idxs[i+start_idx]]
             batch_one_hot_vec[i] = onehotvec
         else:
-            ps, seg, center, hclass, hres, sclass, sres, rotangle = \
-                dataset[idxs[i+start_idx]]
+            ps, seg, center, hclass, hres, sclass, sres, rotangle = dataset[idxs[i+start_idx]]
         batch_data[i, ...] = ps[:, 0:num_channel]
         batch_label[i, :] = seg
         batch_center[i, :] = center

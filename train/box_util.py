@@ -8,10 +8,12 @@ Date: September 2017
 from __future__ import print_function
 
 import numpy as np
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull    # 计算包围点的凸包
 
+
+# 计算两个多边形交集的顶点
 def polygon_clip(subjectPolygon, clipPolygon):
-   """ Clip a polygon with another polygon.
+    """ Clip a polygon with another polygon.
 
    Ref: https://rosettacode.org/wiki/Sutherland-Hodgman_polygon_clipping#Python
 
@@ -24,68 +26,80 @@ def polygon_clip(subjectPolygon, clipPolygon):
    Return:
      a list of (x,y) vertex point for the intersection polygon.
    """
-   def inside(p):
-      return(cp2[0]-cp1[0])*(p[1]-cp1[1]) > (cp2[1]-cp1[1])*(p[0]-cp1[0])
- 
-   def computeIntersection():
-      dc = [ cp1[0] - cp2[0], cp1[1] - cp2[1] ]
-      dp = [ s[0] - e[0], s[1] - e[1] ]
-      n1 = cp1[0] * cp2[1] - cp1[1] * cp2[0]
-      n2 = s[0] * e[1] - s[1] * e[0] 
-      n3 = 1.0 / (dc[0] * dp[1] - dc[1] * dp[0])
-      return [(n1*dp[0] - n2*dc[0]) * n3, (n1*dp[1] - n2*dc[1]) * n3]
- 
-   outputList = subjectPolygon
-   cp1 = clipPolygon[-1]
- 
-   for clipVertex in clipPolygon:
-      cp2 = clipVertex
-      inputList = outputList
-      outputList = []
-      s = inputList[-1]
- 
-      for subjectVertex in inputList:
-         e = subjectVertex
-         if inside(e):
-            if not inside(s):
-               outputList.append(computeIntersection())
-            outputList.append(e)
-         elif inside(s):
-            outputList.append(computeIntersection())
-         s = e
-      cp1 = cp2
-      if len(outputList) == 0:
-          return None
-   return(outputList)
 
-def poly_area(x,y):
+    def inside(p):
+        return (cp2[0] - cp1[0]) * (p[1] - cp1[1]) > (cp2[1] - cp1[1]) * (p[0] - cp1[0])
+
+    def computeIntersection():
+        dc = [cp1[0] - cp2[0], cp1[1] - cp2[1]]
+        dp = [s[0] - e[0], s[1] - e[1]]
+        n1 = cp1[0] * cp2[1] - cp1[1] * cp2[0]
+        n2 = s[0] * e[1] - s[1] * e[0]
+        n3 = 1.0 / (dc[0] * dp[1] - dc[1] * dp[0])
+        return [(n1 * dp[0] - n2 * dc[0]) * n3, (n1 * dp[1] - n2 * dc[1]) * n3]
+
+    outputList = subjectPolygon
+    cp1 = clipPolygon[-1]
+
+    for clipVertex in clipPolygon:
+        cp2 = clipVertex
+        inputList = outputList
+        outputList = []
+        s = inputList[-1]
+
+        for subjectVertex in inputList:
+            e = subjectVertex
+            if inside(e):
+                if not inside(s):
+                    outputList.append(computeIntersection())
+                outputList.append(e)
+            elif inside(s):
+                outputList.append(computeIntersection())
+            s = e
+        cp1 = cp2
+        if len(outputList) == 0:
+            return None
+    return (outputList)
+
+
+# 计算多边形面积
+def poly_area(x, y):
     """ Ref: http://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates """
-    return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))
+    # np.roll(a,shift,axis=None)沿给定轴滚动数组元素，默认情况下扁平化水平滚动然后再恢复形状
+    return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
 
+
+# 计算凸包的交集顶点及其面积
 def convex_hull_intersection(p1, p2):
     """ Compute area of two convex hull's intersection area.
         p1,p2 are a list of (x,y) tuples of hull vertices.
         return a list of (x,y) for the intersection and its volume
     """
-    inter_p = polygon_clip(p1,p2)
+    inter_p = polygon_clip(p1, p2)
     if inter_p is not None:
         hull_inter = ConvexHull(inter_p)
         return inter_p, hull_inter.volume
     else:
-        return None, 0.0  
+        return None, 0.0
 
+
+# 根据顶点，计算三维体积
 def box3d_vol(corners):
     ''' corners: (8,3) no assumption on axis direction '''
-    a = np.sqrt(np.sum((corners[0,:] - corners[1,:])**2))
-    b = np.sqrt(np.sum((corners[1,:] - corners[2,:])**2))
-    c = np.sqrt(np.sum((corners[0,:] - corners[4,:])**2))
-    return a*b*c
+    a = np.sqrt(np.sum((corners[0, :] - corners[1, :]) ** 2))   # 长、宽、高
+    b = np.sqrt(np.sum((corners[1, :] - corners[2, :]) ** 2))
+    c = np.sqrt(np.sum((corners[0, :] - corners[4, :]) ** 2))
+    return a * b * c
 
+
+# 顺时针方向判断
 def is_clockwise(p):
-    x = p[:,0]
-    y = p[:,1]
-    return np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)) > 0
+    x = p[:, 0]
+    y = p[:, 1]
+    return np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)) > 0
 
+
+# 计算3D边框IoU
 def box3d_iou(corners1, corners2):
     ''' Compute 3D bounding box IoU.
 
@@ -98,22 +112,23 @@ def box3d_iou(corners1, corners2):
 
     todo (rqi): add more description on corner points' orders.
     '''
-    # corner points are in counter clockwise order
-    rect1 = [(corners1[i,0], corners1[i,2]) for i in range(3,-1,-1)]
-    rect2 = [(corners2[i,0], corners2[i,2]) for i in range(3,-1,-1)] 
-    area1 = poly_area(np.array(rect1)[:,0], np.array(rect1)[:,1])
-    area2 = poly_area(np.array(rect2)[:,0], np.array(rect2)[:,1])
-    inter, inter_area = convex_hull_intersection(rect1, rect2)
-    iou_2d = inter_area/(area1+area2-inter_area)
-    ymax = min(corners1[0,1], corners2[0,1])
-    ymin = max(corners1[4,1], corners2[4,1])
-    inter_vol = inter_area * max(0.0, ymax-ymin)
+    # corner points are in counter clockwise order  顺时针排序
+    rect1 = [(corners1[i, 0], corners1[i, 2]) for i in range(3, -1, -1)]    # 矩形四个点(x,z)的列表
+    rect2 = [(corners2[i, 0], corners2[i, 2]) for i in range(3, -1, -1)]
+    area1 = poly_area(np.array(rect1)[:, 0], np.array(rect1)[:, 1])         # 计算矩形面积
+    area2 = poly_area(np.array(rect2)[:, 0], np.array(rect2)[:, 1])
+    inter, inter_area = convex_hull_intersection(rect1, rect2)              # 计算交集
+    iou_2d = inter_area / (area1 + area2 - inter_area)                      # 计算二维IoU
+    ymax = min(corners1[0, 1], corners2[0, 1])  # 朝上y负，大y的较大值，小y的较大值
+    ymin = max(corners1[4, 1], corners2[4, 1])
+    inter_vol = inter_area * max(0.0, ymax - ymin)  # 交集体积
     vol1 = box3d_vol(corners1)
     vol2 = box3d_vol(corners2)
-    iou = inter_vol / (vol1 + vol2 - inter_vol)
+    iou = inter_vol / (vol1 + vol2 - inter_vol)     # 计算三维IoU
     return iou, iou_2d
 
 
+# 计算两个2D边框的IoU的基础函数
 def get_iou(bb1, bb2):
     """
     Calculate the Intersection over Union (IoU) of two 2D bounding boxes.
@@ -164,6 +179,8 @@ def get_iou(bb1, bb2):
     assert iou <= 1.0
     return iou
 
+
+# 计算两个2D边框的IoU
 def box2d_iou(box1, box2):
     ''' Compute 2D bounding box IoU.
 
@@ -173,53 +190,56 @@ def box2d_iou(box1, box2):
     Output:
         iou: 2D IoU scalar
     '''
-    return get_iou({'x1':box1[0], 'y1':box1[1], 'x2':box1[2], 'y2':box1[3]}, \
-        {'x1':box2[0], 'y1':box2[1], 'x2':box2[2], 'y2':box2[3]})
+    return get_iou({'x1': box1[0], 'y1': box1[1], 'x2': box1[2], 'y2': box1[3]}, \
+                   {'x1': box2[0], 'y1': box2[1], 'x2': box2[2], 'y2': box2[3]})
 
 
-if __name__=='__main__':
+# 测试
+if __name__ == '__main__':
 
     # Function for polygon ploting
     import matplotlib
     from matplotlib.patches import Polygon
     from matplotlib.collections import PatchCollection
     import matplotlib.pyplot as plt
-    def plot_polys(plist,scale=500.0):
+
+
+    def plot_polys(plist, scale=500.0):
         fig, ax = plt.subplots()
         patches = []
         for p in plist:
-            poly = Polygon(np.array(p)/scale, True)
+            poly = Polygon(np.array(p) / scale, True)
             patches.append(poly)
 
-    pc = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.5)
-    colors = 100*np.random.rand(len(patches))
-    pc.set_array(np.array(colors))
-    ax.add_collection(pc)
-    plt.show()
- 
+        pc = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.5)
+        colors = 100 * np.random.rand(len(patches))
+        pc.set_array(np.array(colors))
+        ax.add_collection(pc)
+        plt.show()
+
     # Demo on ConvexHull
-    points = np.random.rand(30, 2)   # 30 random points in 2-D
+    points = np.random.rand(30, 2)  # 30 random points in 2-D
     hull = ConvexHull(points)
-    # **In 2D "volume" is is area, "area" is perimeter
+    # 二维情况下，volume代表面积，area代表周长
     print(('Hull area: ', hull.volume))
     for simplex in hull.simplices:
         print(simplex)
 
     # Demo on convex hull overlaps
-    sub_poly = [(0,0),(300,0),(300,300),(0,300)]
-    clip_poly = [(150,150),(300,300),(150,450),(0,300)] 
+    sub_poly = [(0, 0), (300, 0), (300, 300), (0, 300)]
+    clip_poly = [(150, 150), (300, 300), (150, 450), (0, 300)]
     inter_poly = polygon_clip(sub_poly, clip_poly)
-    print(poly_area(np.array(inter_poly)[:,0], np.array(inter_poly)[:,1]))
-    
+    print(poly_area(np.array(inter_poly)[:, 0], np.array(inter_poly)[:, 1]))
+
     # Test convex hull interaction function
-    rect1 = [(50,0),(50,300),(300,300),(300,0)]
-    rect2 = [(150,150),(300,300),(150,450),(0,300)] 
+    rect1 = [(50, 0), (50, 300), (300, 300), (300, 0)]
+    rect2 = [(150, 150), (300, 300), (150, 450), (0, 300)]
     plot_polys([rect1, rect2])
     inter, area = convex_hull_intersection(rect1, rect2)
     print((inter, area))
     if inter is not None:
-        print(poly_area(np.array(inter)[:,0], np.array(inter)[:,1]))
-    
+        print(poly_area(np.array(inter)[:, 0], np.array(inter)[:, 1]))
+
     print('------------------')
     rect1 = [(0.30026005199835404, 8.9408694211408424), \
              (-1.1571105364358421, 9.4686676477075533), \

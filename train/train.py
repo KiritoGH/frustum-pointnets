@@ -143,6 +143,7 @@ def train():
             tf.summary.scalar('total_loss', total_loss)
 
             # Write summaries of bounding box IoU and segmentation accuracies
+            # 边框IoU和分割准确率
             iou2ds, iou3ds = tf.py_func(provider.compute_box3d_iou, [ \
                 end_points['center'], \
                 end_points['heading_scores'], end_points['heading_residuals'], \
@@ -266,8 +267,7 @@ def train_one_epoch(sess, ops, train_writer):
                      ops['size_residual_label_pl']: batch_sres,
                      ops['is_training_pl']: is_training, }
 
-        summary, step, _, loss_val, logits_val, centers_pred_val, \
-        iou2ds, iou3ds = \
+        summary, step, _, loss_val, logits_val, centers_pred_val, iou2ds, iou3ds = \
             sess.run([ops['merged'], ops['step'], ops['train_op'], ops['loss'],
                       ops['logits'], ops['centers_pred'],
                       ops['end_points']['iou2ds'], ops['end_points']['iou3ds']],
