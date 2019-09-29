@@ -147,24 +147,39 @@ class FrustumDataset(object):
         if from_rgb_detection:
             with open(overwritten_data_path, 'rb') as fp:   # rb代表只读，二进制格式
                 self.id_list = pickle.load(fp)
+                print('RGB-id_list shape:', len(self.id_list))
                 self.box2d_list = pickle.load(fp)
+                print('box2d load finished')
                 self.input_list = pickle.load(fp)
+                print('input load finished')
                 self.type_list = pickle.load(fp)
+                print('type load finished')
                 # frustum_angle is clockwise angle from positive x-axis
                 self.frustum_angle_list = pickle.load(fp)
+                print('frustum_angle load finished')
                 self.prob_list = pickle.load(fp)
+                print('prob load finished')
         else:
             with open(overwritten_data_path, 'rb') as fp:
                 self.id_list = pickle.load(fp)
+                print('dataset-id_list shape:', len(self.id_list))
                 self.box2d_list = pickle.load(fp)
+                print('box2d load finished')
                 self.box3d_list = pickle.load(fp)
+                print('box3d load finished')
                 self.input_list = pickle.load(fp)
+                print('input load finished')
                 self.label_list = pickle.load(fp)
+                print('label load finished')
                 self.type_list = pickle.load(fp)
+                print('type load finished')
                 self.heading_list = pickle.load(fp)
+                print('heading load finished')
                 self.size_list = pickle.load(fp)
+                print('size load finished')
                 # frustum_angle is clockwise angle from positive x-axis
                 self.frustum_angle_list = pickle.load(fp)
+                print('frustum_angle load finished')
         print('load ends')
 
     def __len__(self):
@@ -190,9 +205,12 @@ class FrustumDataset(object):
             point_set = self.get_center_view_point_set(index)
         else:
             point_set = self.input_list[index]
+        # print('point set shape:', point_set.shape[0])
         # 重采样，从点云数据中随机选取设定点数
+        # 样本点数从几十到二、三千不等，大多为500以下，采用放回选取，所以点有挺多重复的
         choice = np.random.choice(point_set.shape[0], self.npoints, replace=True)
         point_set = point_set[choice, :]
+        # print('point set shape:', point_set.shape[0])
 
         if self.from_rgb_detection:     # 数据由RGB检测器获得，返回点云数据、旋转角度、概率列表
             if self.one_hot:

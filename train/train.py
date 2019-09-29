@@ -129,7 +129,7 @@ def train():
             batch = tf.get_variable('batch', [], initializer=tf.constant_initializer(0), trainable=False)
             bn_decay = get_bn_decay(batch)  # 获取移动平均权重
             # log_string('bn decay: %f' % bn_decay)   # 错误：要求float，但bn_decay是张量
-            tf.summary.scalar('bn_decay', bn_decay)
+            tf.summary.scalar('bn_decay', bn_decay)     # 用来显示标量信息
 
             # 获取模型和损失
             end_points = MODEL.get_model(pointclouds_pl, one_hot_vec_pl, is_training_pl, bn_decay=bn_decay)
@@ -183,8 +183,8 @@ def train():
         sess = tf.Session(config=config)
 
         # Add summary writers
-        merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)
+        merged = tf.summary.merge_all()     # 保存所有summary到磁盘，以便tensorboard显示
+        train_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'train'), sess.graph)    # 指定一个文件用来保存图
         test_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, 'test'), sess.graph)
 
         # 变量初始化
@@ -234,6 +234,7 @@ def train_one_epoch(sess, ops, train_writer):
 
     # 打乱训练样本
     train_idxs = np.arange(0, len(TRAIN_DATASET))
+    print(len(TRAIN_DATASET))
     np.random.shuffle(train_idxs)
     num_batches = len(TRAIN_DATASET) / BATCH_SIZE
 
@@ -250,12 +251,12 @@ def train_one_epoch(sess, ops, train_writer):
         start_idx = batch_idx * BATCH_SIZE      # 当前batch的起始索引
         end_idx = (batch_idx + 1) * BATCH_SIZE  # 当前batch的结尾索引
 
+        # 获取一个batch的数据
         batch_data, batch_label, batch_center, \
         batch_hclass, batch_hres, \
         batch_sclass, batch_sres, \
         batch_rot_angle, batch_one_hot_vec = \
-            get_batch(TRAIN_DATASET, train_idxs, start_idx, end_idx,
-                      NUM_POINT, NUM_CHANNEL)
+            get_batch(TRAIN_DATASET, train_idxs, start_idx, end_idx, NUM_POINT, NUM_CHANNEL)
 
         feed_dict = {ops['pointclouds_pl']: batch_data,
                      ops['one_hot_vec_pl']: batch_one_hot_vec,
@@ -273,7 +274,7 @@ def train_one_epoch(sess, ops, train_writer):
                       ops['end_points']['iou2ds'], ops['end_points']['iou3ds']],
                      feed_dict=feed_dict)
 
-        train_writer.add_summary(summary, step)
+        train_writer.add_summary(summary, step)     # 保存训练过程和训练步数
 
         preds_val = np.argmax(logits_val, 2)
         correct = np.sum(preds_val == batch_label)
